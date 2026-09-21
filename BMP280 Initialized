@@ -1,20 +1,24 @@
-#REV 0
+#REV 5
 from machine import I2C, Pin
 import time
-from bmp280 import BMP280
+from BMP280 import BMP280
 
 # address pins and frequency
 i2c = I2C(0, scl=Pin(5), sda=Pin(4), freq=400000)
 
 # my BMP280 class call
-bmp = BMP280(i2c)
+bmp = BMP280(i2c, addr=0x76)
 
 print("BMP280 ready")
 
 # Main loop to stream
 while True:
-    temp = bmp.temperature
+    celsius = bmp.temperature
+#added fahrenheit because this is America
+    fahrenheit = (celsius * 1.8) + 32
     pressure = bmp.pressure
     
-    print(f"Temperature: {temperature:.2f} °C  |  Pressure: {pressure:.2f} hPa")
+    print(f"Temperature: {celsius:.2f} °C / {fahrenheit:.2f} F |  Pressure: {pressure:.2f} hPa")
     time.sleep(1)
+    
+  
