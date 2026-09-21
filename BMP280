@@ -1,0 +1,60 @@
+import time
+from micropython import const
+
+BMP280_I2C_ADDR = const(0x76)
+
+class BMP280:
+    def __init__(self, i2c, addr=BMP280_I2C_ADDR):
+        self.i2c = i2c
+        self.addr = addr
+        # Soft reset
+        self.i2c.writeto_mem(self.addr, 0xE0, b'\xB6')
+        time.sleep(0.1)
+        # Read calibration data & set normal mode
+        self._load_calibration()
+        self.i2c.writeto_mem(self.addr, 0xF4, b'\x27') # Temp x1, Press x1, Normal mode
+        self.i2c.writeto_mem(self.addr, 0xF5, b'\xA0') # Standby 1000ms, Filter off
+
+    def _load_calibration(self):
+        data = self.i2c.readfrom_mem(self.addr, 0x88, 24)
+        self.dig_T1 = int.from_bytes(data[0:2], 'little', False)
+        self.dig_T2 = int.from_bytes(data[2:4], 'little', True)
+        self.dig_T3 = int.from_bytes(data[4:6], 'little', True)
+        self.dig_P1 = int.from_bytes(data[6:8], 'little', False)
+        self.dig_P2 = int.from_bytes(data[8:10], 'little', True)
+        self.dig_P3 = int.from_bytes(data[10:12], 'little', True)
+        self.dig_P4 = int.from_bytes(data[12:14], 'little', True)
+        self.dig_P5 = int.from_bytes(data[14:16], 'little', True)
+        self.dig_P6 = int.from_bytes(data[16:18], 'little', True)
+        self.dig_P7 = int.from_bytes(data[18:20], 'little', True)
+        self.dig_P8 = int.from_bytes(data[20:22], 'little', True)
+        self.dig_P9 = int.from_bytes(data[22:24], 'little', True)
+
+    @property
+    def temperature(self):
+        data = self.i2c.readfrom_mem(self.addr, 0xFA, 3)
+        adc_T = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
+        var1 = (((adc_T >> 3) - (self.dig_T1 << 1)) * self.dig_T2) >> 11
+        var2 = (((((adc_T >> 4) - self.dig_T1) * ((adc_T >> 4) - self.dig_T1)) >> 12) * self.dig_T3) >> 14
+        self.t_fine = var1 + var2
+        return ((self.t_fine * 5 + 128) >> 8) / 100.0
+
+    @property
+    def pressure(self):
+        _ = self.temperature # Updates t_fine
+        data = self.i2c.readfrom_mem(self.addr, 0xF7, 3)
+        adc_P = (data[0] << 12) | (data[1] << 4) | (data[2] >> 4)
+        var1 = (self.t_fine >> 1) - 64000
+        var2 = (((var1 >> 2) * (var1 >> 2)) >> 11) * self.dig_P6
+        var2 = var2 + ((var1 * self.dig_P5) << 1)
+        var2 = (var2 >> 2) + (self.dig_P4 << 16)
+        var1 = (((self.dig_P3 * (((var1 >> 2) * (var1 >> 2)) >> 13)) >> 3) + ((self.dig_P3 * var1) >> 1)) >> 18
+        var1 = ((32768 + var1) * self.dig_P1) >> 15
+        if var1 == 0:
+            return 0
+        p = (((1048576 - adc_P) - (var2 >> 12)) * 3125)
+        p = (p // var1) * 2
+        var1 = (self.dig_P9 * (((p >> 3) * (p >> 3)) >> 13)) >> 13
+        var2 = (((p >> 2)) * self.dig_P8) >> 13
+        p = (p + ((var1 + var2 + self.dig_P7) >> 4)) / 100.0
+        return p
