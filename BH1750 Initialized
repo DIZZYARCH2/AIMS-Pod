@@ -1,0 +1,33 @@
+REV 0
+from machine import I2C, Pin
+import time
+
+# Initialize I2C on Bus 0 using GP0 and GP1
+i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
+
+# BH1750 standard I2C address
+BH1750_ADDR = 0x23
+# Continuous High-Resolution Mode command
+CONT_HI_RES_MODE = 0x10 
+
+def read_bh1750():
+    # Send command to start measuring
+    i2c.writeto(BH1750_ADDR, bytes([CONT_HI_RES_MODE]))
+    time.sleep_ms(180) # Wait for the sensor to complete measurement
+    
+    # Read the 2 bytes of data
+    data = i2c.readfrom(BH1750_ADDR, 2)
+    
+    # Combine bytes into a raw 16-bit integer
+    raw_val = (data[0] << 8) | data[1]
+    
+    # Datasheet conversion for Lux
+    lux = raw_val / 1.2 
+    
+    return raw_val, lux
+
+print("Starting BH1750 sensor on GP0/GP1...")
+while True:
+    raw, lux = read_bh1750()
+    print(f"Raw Integer: {raw}  -->  Lux: {lux:.2f}")
+    time.sleep(0.5)
