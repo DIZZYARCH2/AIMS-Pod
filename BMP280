@@ -1,3 +1,5 @@
+#adapted from David Stenwall's open-source micropython-bmp280 repository on GitHub,
+
 import time
 from micropython import const
 
